@@ -1,4 +1,17 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(composer install:*)",
+      "Bash(composer require:*)",
+      "Bash(php artisan vendor:publish:*)",
+      "Bash(php artisan migrate:*)",
+      "Bash(php artisan optimize:clear:*)",
+      "Bash(php artisan filament:install:*)",
+      "Bash(php artisan shield:install:*)",
+      "Bash(php artisan shield:super-admin:*)",
+      "Bash(php artisan:*)"
+    ]
+  },
   "enabledMcpjsonServers": [
     "laravel-boost",
     "herd"
