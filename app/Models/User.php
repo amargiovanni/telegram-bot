@@ -14,14 +14,14 @@ use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements MustVerifyEmail, HasMedia
+class User extends Authenticatable implements HasMedia, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    use LogsActivityAllDirty;
     use HasRoles;
     use InteractsWithMedia;
+    use LogsActivityAllDirty;
 
     /**
      * The attributes that are mass assignable.
