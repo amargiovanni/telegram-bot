@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\UrlRedirectController;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use Illuminate\Support\Facades\Route;
+
+// Health check endpoint (no auth required for monitoring systems)
+Route::get('/health', HealthCheckController::class)->name('health.check');
 
 // URL Shortener redirect
 Route::get('/s/{code}', [UrlRedirectController::class, 'redirect'])->name('url.redirect');

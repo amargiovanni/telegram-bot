@@ -21,3 +21,13 @@ Schedule::command('reminders:send')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Database Backup - runs daily at 2 AM
+Schedule::command('backup:run --only-db')
+    ->daily()
+    ->at('02:00');
+
+// Cleanup old backups - runs daily at 3 AM
+Schedule::command('backup:clean')
+    ->daily()
+    ->at('03:00');
