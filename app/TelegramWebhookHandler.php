@@ -8,6 +8,7 @@ use App\Models\AutoResponse;
 use App\Models\BotCommand;
 use App\Models\BotLog;
 use App\Models\ShortenedUrl;
+use App\Services\BotRateLimiter;
 use App\Services\FiscalCodeCalculator;
 use App\Services\SafeMathCalculator;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
@@ -16,6 +17,7 @@ use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\Writer\PngWriter;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -38,10 +40,15 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function help(): void
     {
-        $commands = BotCommand::where('telegraph_bot_id', $this->bot->id)
-            ->active()
-            ->inMenu()
-            ->get();
+        // Cache bot commands for 1 hour
+        $cacheKey = "bot_commands:{$this->bot->id}";
+
+        $commands = Cache::remember($cacheKey, 3600, function () {
+            return BotCommand::where('telegraph_bot_id', $this->bot->id)
+                ->active()
+                ->inMenu()
+                ->get();
+        });
 
         $helpText = "📚 <b>Available Commands:</b>\n\n";
 
@@ -54,6 +61,11 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function shorten(): void
     {
+        // Rate limiting
+        if (! $this->checkRateLimit('shorten', 'medium')) {
+            return;
+        }
+
         $text = $this->message->text();
         $url = trim(str_replace('/shorten', '', $text));
 
@@ -100,6 +112,11 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function cf(): void
     {
+        // Rate limiting
+        if (! $this->checkRateLimit('cf', 'heavy')) {
+            return;
+        }
+
         $text = $this->message->text();
         $params = trim(str_replace('/cf', '', $text));
 
@@ -370,6 +387,11 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function qr(): void
     {
+        // Rate limiting
+        if (! $this->checkRateLimit('qr', 'heavy')) {
+            return;
+        }
+
         $text = $this->message->text();
         $data = trim(str_replace('/qr', '', $text));
 
@@ -473,6 +495,11 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function password(): void
     {
+        // Rate limiting
+        if (! $this->checkRateLimit('password', 'medium')) {
+            return;
+        }
+
         $text = $this->message->text();
         $params = trim(str_replace('/password', '', $text));
 
@@ -502,6 +529,11 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function calc(): void
     {
+        // Rate limiting
+        if (! $this->checkRateLimit('calc', 'heavy')) {
+            return;
+        }
+
         $text = $this->message->text();
         $expression = trim(str_replace('/calc', '', $text));
 
@@ -571,6 +603,8 @@ class TelegramWebhookHandler extends WebhookHandler
         $response .= "/cf - Codice fiscale\n";
         $response .= "/password - Genera password\n";
         $response .= "/calc - Calcolatrice\n";
+        $response .= "/meteo - Previsioni meteo\n";
+        $response .= "/traduci - Traduci testo\n";
         $response .= "/dado - Lancia dadi\n";
         $response .= "/moneta - Lancia moneta\n";
         $response .= "/quiz - Quiz random\n";
@@ -581,6 +615,188 @@ class TelegramWebhookHandler extends WebhookHandler
         $response .= '/pizza /scusa';
 
         $this->chat->html($response)->send();
+    }
+
+    public function meteo(): void
+    {
+        // Rate limiting
+        if (! $this->checkRateLimit('meteo', 'medium')) {
+            return;
+        }
+
+        $text = $this->message->text();
+        $city = trim(str_replace('/meteo', '', $text));
+
+        if (empty($city)) {
+            $helpMessage = "🌤️ <b>Previsioni Meteo</b>\n\n";
+            $helpMessage .= "Invia il nome della città:\n";
+            $helpMessage .= "<code>/meteo Roma</code>\n";
+            $helpMessage .= "<code>/meteo Milano</code>\n";
+            $helpMessage .= '<code>/meteo New York</code>';
+
+            $this->chat->html($helpMessage)->send();
+
+            return;
+        }
+
+        try {
+            // Use wttr.in API (free, no key required)
+            $url = 'https://wttr.in/'.urlencode($city).'?format=j1&lang=it';
+            $weatherData = file_get_contents($url);
+
+            if ($weatherData === false) {
+                throw new Exception('Unable to fetch weather data');
+            }
+
+            $data = json_decode($weatherData, true);
+
+            if (! isset($data['current_condition'])) {
+                throw new Exception('Invalid weather data');
+            }
+
+            $current = $data['current_condition'][0];
+            $area = $data['nearest_area'][0] ?? null;
+
+            $temp = $current['temp_C'];
+            $feels = $current['FeelsLikeC'];
+            $desc = $current['lang_it'][0]['value'] ?? $current['weatherDesc'][0]['value'];
+            $humidity = $current['humidity'];
+            $wind = $current['windspeedKmph'];
+            $pressure = $current['pressure'];
+
+            $location = $area ? ($area['areaName'][0]['value'].', '.$area['country'][0]['value']) : $city;
+
+            $response = "🌤️ <b>Meteo {$location}</b>\n\n";
+            $response .= "🌡️ Temperatura: <b>{$temp}°C</b> (percepita {$feels}°C)\n";
+            $response .= "☁️ Condizioni: {$desc}\n";
+            $response .= "💧 Umidità: {$humidity}%\n";
+            $response .= "💨 Vento: {$wind} km/h\n";
+            $response .= "🔽 Pressione: {$pressure} hPa\n\n";
+
+            // Next days forecast
+            if (isset($data['weather']) && count($data['weather']) > 0) {
+                $response .= "<b>📅 Prossimi giorni:</b>\n";
+                foreach (array_slice($data['weather'], 0, 3) as $day) {
+                    $date = date('d/m', strtotime($day['date']));
+                    $maxTemp = $day['maxtempC'];
+                    $minTemp = $day['mintempC'];
+                    $response .= "• {$date}: {$minTemp}°-{$maxTemp}°C\n";
+                }
+            }
+
+            $this->chat->html($response)->send();
+
+            BotLog::log(
+                'command_executed',
+                $this->bot->id,
+                $this->chat->id,
+                'Weather checked',
+                ['city' => $city, 'location' => $location]
+            );
+        } catch (Exception $e) {
+            $this->chat->html("❌ <b>Errore!</b>\n\nCittà non trovata o servizio temporaneamente non disponibile.")->send();
+
+            BotLog::log(
+                'error',
+                $this->bot->id,
+                $this->chat->id,
+                'Weather fetch error',
+                ['city' => $city, 'error' => $e->getMessage()]
+            );
+        }
+    }
+
+    public function traduci(): void
+    {
+        // Rate limiting
+        if (! $this->checkRateLimit('traduci', 'medium')) {
+            return;
+        }
+
+        $text = $this->message->text();
+        $params = trim(str_replace('/traduci', '', $text));
+
+        if (empty($params)) {
+            $helpMessage = "🌐 <b>Traduttore</b>\n\n";
+            $helpMessage .= "Invia il testo da tradurre:\n";
+            $helpMessage .= "<code>/traduci en:it Hello World</code>\n";
+            $helpMessage .= "<code>/traduci it:en Ciao mondo</code>\n";
+            $helpMessage .= "<code>/traduci es:it Hola amigo</code>\n\n";
+            $helpMessage .= 'Lingue: it, en, es, fr, de, pt, ru, ja, zh';
+
+            $this->chat->html($helpMessage)->send();
+
+            return;
+        }
+
+        // Parse format: lang1:lang2 text
+        if (! preg_match('/^([a-z]{2}):([a-z]{2})\s+(.+)$/i', $params, $matches)) {
+            $this->chat->html("❌ <b>Formato errato!</b>\n\nUsa: <code>/traduci en:it testo</code>")->send();
+
+            return;
+        }
+
+        $from = strtolower($matches[1]);
+        $to = strtolower($matches[2]);
+        $textToTranslate = $matches[3];
+
+        try {
+            // Use LibreTranslate API (free, public instance)
+            $url = 'https://libretranslate.com/translate';
+            $postData = json_encode([
+                'q' => $textToTranslate,
+                'source' => $from,
+                'target' => $to,
+                'format' => 'text',
+            ]);
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200 || ! $result) {
+                throw new Exception('Translation service unavailable');
+            }
+
+            $data = json_decode($result, true);
+
+            if (! isset($data['translatedText'])) {
+                throw new Exception('Invalid translation response');
+            }
+
+            $translation = $data['translatedText'];
+
+            $response = "🌐 <b>Traduzione</b>\n\n";
+            $response .= "📝 Originale ({$from}):\n<i>{$textToTranslate}</i>\n\n";
+            $response .= "✅ Tradotto ({$to}):\n<b>{$translation}</b>";
+
+            $this->chat->html($response)->send();
+
+            BotLog::log(
+                'command_executed',
+                $this->bot->id,
+                $this->chat->id,
+                'Translation completed',
+                ['from' => $from, 'to' => $to, 'length' => strlen($textToTranslate)]
+            );
+        } catch (Exception $e) {
+            $this->chat->html("❌ <b>Errore nella traduzione!</b>\n\nVerifica le lingue e riprova.")->send();
+
+            BotLog::log(
+                'error',
+                $this->bot->id,
+                $this->chat->id,
+                'Translation error',
+                ['error' => $e->getMessage()]
+            );
+        }
     }
 
     public function onChatMemberUpdated(): void
@@ -776,5 +992,41 @@ class TelegramWebhookHandler extends WebhookHandler
         }
 
         return '🔴 Debole';
+    }
+
+    /**
+     * Check rate limit for command execution
+     */
+    private function checkRateLimit(string $command, string $tier = 'medium'): bool
+    {
+        $rateLimiter = new BotRateLimiter;
+        $key = BotRateLimiter::key($this->chat->chat_id, $command);
+
+        if (! $rateLimiter->attempt($key, $tier)) {
+            $availableIn = $rateLimiter->availableIn($key);
+            $seconds = ceil($availableIn);
+
+            $response = "⏱️ <b>Troppo veloce!</b>\n\n";
+            $response .= "Hai raggiunto il limite per questo comando.\n";
+            $response .= "Riprova tra <b>{$seconds} secondi</b>.";
+
+            $this->chat->html($response)->send();
+
+            BotLog::log(
+                'rate_limit_exceeded',
+                $this->bot->id,
+                $this->chat->id,
+                "Rate limit exceeded for command: {$command}",
+                [
+                    'command' => $command,
+                    'tier' => $tier,
+                    'available_in' => $seconds,
+                ]
+            );
+
+            return false;
+        }
+
+        return true;
     }
 }

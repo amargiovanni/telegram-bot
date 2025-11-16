@@ -43,9 +43,21 @@ Sistema completo e configurabile per gestire multipli bot Telegram attraverso un
 ### 🔧 Utility e Tools
 Strumenti pratici per uso quotidiano:
 - ✅ `/qr [testo/url]` - Generatore QR Code con immagine
-- ✅ `/password [lunghezza]` - Password sicure (8-64 caratteri)
-- ✅ `/calc [espressione]` - Calcolatrice matematica
+- ✅ `/password [lunghezza]` - Password sicure crittograficamente (8-64 caratteri)
+- ✅ `/calc [espressione]` - Calcolatrice matematica sicura (senza eval)
+- ✅ `/meteo [città]` - Previsioni meteo in tempo reale + forecast 3 giorni
+- ✅ `/traduci [lang1:lang2 testo]` - Traduttore multilingua (IT, EN, ES, FR, DE, PT, RU, JA, ZH)
 - ✅ `/info` - Informazioni bot e lista comandi completa
+
+### 🛡️ Sicurezza e Performance
+- ✅ **Rate Limiting**: Protezione anti-spam su tutti i comandi
+  - Heavy commands (calc, qr, cf): 5 req/min
+  - Medium commands (password, shorten, meteo, traduci): 10 req/min
+  - Light commands (fun): 20 req/min
+- ✅ **Secure Calculator**: Parser matematico senza eval() (prevenzione code injection)
+- ✅ **Crypto Random**: Password generate con random_int() invece di rand()
+- ✅ **Caching**: Cache intelligente per comandi frequenti (1h TTL)
+- ✅ **Input Validation**: Validazione rigorosa su tutti gli input utente
 
 ### 🎮 Giochi e Intrattenimento
 Giochi e passatempi interattivi:
