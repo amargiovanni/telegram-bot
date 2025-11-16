@@ -27,6 +27,7 @@
         "livewire/volt": "^1.9",
         "oltrematica/laravel-ratelimiter": "^1.0",
         "spatie/laravel-activitylog": "^4.10",
+        "spatie/laravel-backup": "^9.3",
         "spatie/laravel-medialibrary": "^11.17",
         "spatie/laravel-permission": "^6.23",
         "willvincent/feeds": "^2.7"
