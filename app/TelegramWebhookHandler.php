@@ -8,6 +8,8 @@ use App\Models\AutoResponse;
 use App\Models\BotCommand;
 use App\Models\BotLog;
 use App\Models\Reminder;
+use App\Models\ShoppingList;
+use App\Models\ShoppingListItem;
 use App\Models\ShortenedUrl;
 use App\Services\BotRateLimiter;
 use App\Services\FiscalCodeCalculator;
@@ -609,6 +611,7 @@ class TelegramWebhookHandler extends WebhookHandler
         $response .= "/ocr - Estrai testo da immagine\n";
         $response .= "/news - Ultime notizie\n";
         $response .= "/promemoria - Imposta promemoria\n";
+        $response .= "/lista - Lista della spesa condivisa\n";
         $response .= "/dado - Lancia dadi\n";
         $response .= "/moneta - Lancia moneta\n";
         $response .= "/quiz - Quiz random\n";
@@ -929,6 +932,216 @@ class TelegramWebhookHandler extends WebhookHandler
                 'remind_at' => $remindAt->toIso8601String(),
             ]
         );
+    }
+
+    public function lista(): void
+    {
+        // Rate limiting
+        if (! $this->checkRateLimit('lista', 'light')) {
+            return;
+        }
+
+        $text = $this->message->text();
+        $params = trim(str_replace('/lista', '', $text));
+
+        // If no params, show all lists
+        if (empty($params)) {
+            $lists = ShoppingList::forChat($this->chat->id)
+                ->active()
+                ->withCount('items', 'uncheckedItems')
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            if ($lists->isEmpty()) {
+                $response = "🛒 <b>Liste della Spesa</b>\n\n";
+                $response .= "Non hai ancora liste attive.\n\n";
+                $response .= "📝 <b>Crea una lista:</b>\n";
+                $response .= '<code>/lista NomeLista add Item</code>';
+
+                $this->chat->html($response)->send();
+
+                return;
+            }
+
+            $response = "🛒 <b>Liste della Spesa</b>\n\n";
+            foreach ($lists as $list) {
+                $total = $list->items_count;
+                $pending = $list->unchecked_items_count;
+                $response .= "📋 <b>{$list->name}</b>\n";
+                $response .= "   {$pending}/{$total} da comprare\n";
+                $response .= "   <code>/lista {$list->name}</code>\n\n";
+            }
+            $response .= '💡 Usa <code>/lista NomeLista</code> per vedere i dettagli';
+
+            $this->chat->html($response)->send();
+
+            return;
+        }
+
+        // Parse command: lista <name> [action] [params]
+        $parts = explode(' ', $params, 3);
+        $listName = $parts[0];
+        $action = $parts[1] ?? 'view';
+        $actionParam = $parts[2] ?? '';
+
+        // Get or create list
+        $list = ShoppingList::forChat($this->chat->id)
+            ->where('name', $listName)
+            ->active()
+            ->first();
+
+        // Handle add action (creates list if doesn't exist)
+        if ($action === 'add') {
+            if (empty($actionParam)) {
+                $this->chat->html("❌ Specifica cosa aggiungere:\n<code>/lista {$listName} add Latte</code>")->send();
+
+                return;
+            }
+
+            // Create list if doesn't exist
+            if (! $list) {
+                $list = ShoppingList::create([
+                    'telegraph_bot_id' => $this->bot->id,
+                    'telegraph_chat_id' => $this->chat->id,
+                    'name' => $listName,
+                ]);
+            }
+
+            // Parse quantity and item (e.g., "2 kg pasta" or "pasta")
+            $quantity = 1;
+            $unit = null;
+            $itemName = $actionParam;
+
+            if (preg_match('/^(\d+)\s*([a-z]+)?\s+(.+)$/i', $actionParam, $matches)) {
+                $quantity = (int) $matches[1];
+                $unit = $matches[2] ?: null;
+                $itemName = $matches[3];
+            }
+
+            // Get max position
+            $maxPosition = $list->items()->max('position') ?? 0;
+
+            $item = ShoppingListItem::create([
+                'shopping_list_id' => $list->id,
+                'name' => $itemName,
+                'quantity' => $quantity,
+                'unit' => $unit,
+                'position' => $maxPosition + 1,
+            ]);
+
+            $quantityText = $quantity > 1 ? "{$quantity} " : '';
+            $unitText = $unit ? "{$unit} " : '';
+
+            $this->chat->html("✅ Aggiunto: <b>{$quantityText}{$unitText}{$itemName}</b> alla lista <b>{$listName}</b>")->send();
+
+            BotLog::log('shopping_list_item_added', $this->bot->id, $this->chat->id, "Item added to {$listName}", [
+                'list_id' => $list->id,
+                'item_id' => $item->id,
+            ]);
+
+            return;
+        }
+
+        // For all other actions, list must exist
+        if (! $list) {
+            $this->chat->html("❌ Lista <b>{$listName}</b> non trovata.\n\nUsa <code>/lista {$listName} add Item</code> per crearla.")->send();
+
+            return;
+        }
+
+        // Handle check action
+        if ($action === 'check') {
+            $itemId = (int) $actionParam;
+            $item = $list->items()->where('id', $itemId)->first();
+
+            if (! $item) {
+                $this->chat->html("❌ Item #{$itemId} non trovato nella lista <b>{$listName}</b>")->send();
+
+                return;
+            }
+
+            $item->toggleCheck();
+
+            $status = $item->is_checked ? '✅ Fatto' : '⬜ Da fare';
+            $this->chat->html("{$status}: <b>{$item->name}</b>")->send();
+
+            return;
+        }
+
+        // Handle remove action
+        if ($action === 'remove') {
+            $itemId = (int) $actionParam;
+            $item = $list->items()->where('id', $itemId)->first();
+
+            if (! $item) {
+                $this->chat->html("❌ Item #{$itemId} non trovato nella lista <b>{$listName}</b>")->send();
+
+                return;
+            }
+
+            $itemName = $item->name;
+            $item->delete();
+
+            $this->chat->html("🗑️ Rimosso <b>{$itemName}</b> dalla lista")->send();
+
+            return;
+        }
+
+        // Handle clear action
+        if ($action === 'clear') {
+            $deleted = $list->checkedItems()->delete();
+
+            $this->chat->html("🧹 Rimossi <b>{$deleted}</b> elementi completati dalla lista <b>{$listName}</b>")->send();
+
+            return;
+        }
+
+        // Default: view list
+        $items = $list->items;
+
+        if ($items->isEmpty()) {
+            $response = "📋 <b>{$list->name}</b>\n\n";
+            $response .= "Lista vuota.\n\n";
+            $response .= "➕ Aggiungi: <code>/lista {$listName} add Item</code>";
+
+            $this->chat->html($response)->send();
+
+            return;
+        }
+
+        $response = "📋 <b>{$list->name}</b>\n\n";
+
+        // Show unchecked items first
+        $unchecked = $items->where('is_checked', false);
+        if ($unchecked->isNotEmpty()) {
+            $response .= "⬜ <b>Da comprare:</b>\n";
+            foreach ($unchecked as $item) {
+                $qty = $item->quantity > 1 ? "{$item->quantity} " : '';
+                $unit = $item->unit ? "{$item->unit} " : '';
+                $response .= "  #{$item->id} {$qty}{$unit}{$item->name}\n";
+            }
+            $response .= "\n";
+        }
+
+        // Show checked items
+        $checked = $items->where('is_checked', true);
+        if ($checked->isNotEmpty()) {
+            $response .= "✅ <b>Completati:</b>\n";
+            foreach ($checked as $item) {
+                $qty = $item->quantity > 1 ? "{$item->quantity} " : '';
+                $unit = $item->unit ? "{$item->unit} " : '';
+                $response .= "  #{$item->id} {$qty}{$unit}{$item->name}\n";
+            }
+            $response .= "\n";
+        }
+
+        $response .= "💡 <b>Comandi:</b>\n";
+        $response .= "<code>/lista {$listName} add Item</code>\n";
+        $response .= "<code>/lista {$listName} check ID</code>\n";
+        $response .= "<code>/lista {$listName} remove ID</code>\n";
+        $response .= "<code>/lista {$listName} clear</code>";
+
+        $this->chat->html($response)->send();
     }
 
     public function meteo(): void
