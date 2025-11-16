@@ -10,11 +10,15 @@ Sistema completo e configurabile per gestire multipli bot Telegram attraverso un
 - Setup automatico webhook
 - Monitoraggio stato e statistiche bot
 
-### 📡 Feed RSS
-- Monitoraggio automatico feed RSS
-- Pubblicazione automatica nuovi contenuti su chat Telegram
-- Intervallo configurabile per ogni feed
-- Filtri avanzati per contenuti
+### 📡 Feed RSS ✨ COMPLETAMENTE AUTOMATICO
+- ✅ **Monitoraggio automatico** via Laravel Scheduler (ogni minuto)
+- ✅ **Queue system** per gestione asincrona
+- ✅ **Pubblicazione automatica** nuovi contenuti su chat Telegram
+- ✅ **Intervallo configurabile** per ogni feed (5-1440 minuti)
+- ✅ **Tracking intelligente** - memorizza ultima entry per evitare duplicati
+- ✅ **Formattazione automatica** messaggi con emoji e link
+- ✅ **Error handling** completo con logging
+- ✅ **Comando manuale** disponibile: `php artisan telegram:monitor-rss`
 
 ### 🤖 Risposte Automatiche
 - Risposte basate su keywords
@@ -244,3 +248,46 @@ Questo è un sistema modulare e estensibile. Per aggiungere nuove funzionalità:
 ## 📄 Licenza
 
 Questo progetto è sviluppato per uso interno.
+
+## ⏰ Laravel Scheduler Setup
+
+Per abilitare il monitoraggio automatico RSS, aggiungi questo comando al tuo crontab:
+
+```bash
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Il sistema verificherà automaticamente ogni minuto quali feed devono essere controllati (in base al `check_interval` configurato).
+
+### Comandi Manuali Disponibili
+
+```bash
+# Controlla tutti i feed RSS
+php artisan telegram:monitor-rss
+
+# Controlla un feed specifico
+php artisan telegram:monitor-rss --feed=1
+
+# Visualizza i job nella queue
+php artisan queue:work
+
+# Mostra help del comando
+php artisan telegram:monitor-rss --help
+```
+
+## 🔄 Queue System
+
+Il sistema usa Laravel Queues per gestire:
+- Monitoraggio RSS feeds
+- Invio messaggi Telegram
+- Operazioni asincrone
+
+### Setup Queue Worker
+
+Per development:
+```bash
+php artisan queue:work
+```
+
+Per production, usa Supervisor o simili per mantenere attivo il worker.
+
