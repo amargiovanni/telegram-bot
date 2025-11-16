@@ -47,6 +47,8 @@ Strumenti pratici per uso quotidiano:
 - ✅ `/calc [espressione]` - Calcolatrice matematica sicura (senza eval)
 - ✅ `/meteo [città]` - Previsioni meteo in tempo reale + forecast 3 giorni
 - ✅ `/traduci [lang1:lang2 testo]` - Traduttore multilingua (IT, EN, ES, FR, DE, PT, RU, JA, ZH)
+- ✅ `/ocr` - Estrai testo da immagini (OCR con OCR.space API)
+- ✅ `/news [categoria]` - Ultime notizie (tech, world, italia) da Reddit
 - ✅ `/info` - Informazioni bot e lista comandi completa
 
 ### 🛡️ Sicurezza e Performance
@@ -76,6 +78,36 @@ Comandi scherzosi e irriverenti per intrattenimento:
 - ✅ `/decisione [domanda]` - Ti aiuta a decidere (15 risposte)
 - ✅ `/pizza` - Consiglia una pizza random (12 tipi)
 - ✅ `/scusa` - Scuse pronte per sviluppatori (15 varianti)
+
+### ⏰ Promemoria e Timer ✨ NUOVO
+Sistema completo di promemoria automatici:
+- ✅ `/promemoria [tempo] [messaggio]` - Imposta promemoria
+  - Supporto minuti (m), ore (h), giorni (d)
+  - Esempio: `/promemoria 10m Controllare il forno`
+  - Esempio: `/promemoria 1h Riunione importante`
+  - Esempio: `/promemoria 2d Pagare bolletta`
+- ✅ `/promemoria lista` - Visualizza promemoria attivi
+- ✅ `/promemoria cancella [id]` - Elimina promemoria specifico
+- ✅ **Notifiche automatiche** via Laravel Scheduler (ogni minuto)
+- ✅ **Database tracking** con stato invio
+- ✅ **Rate limiting** protezione spam (medium - 10 req/min)
+- ✅ **Logging completo** di creazione e invio
+
+### 🛒 Liste della Spesa Condivise ✨ NUOVO
+Sistema collaborativo per liste della spesa per chat:
+- ✅ `/lista` - Visualizza tutte le tue liste attive
+- ✅ `/lista [nome]` - Mostra dettagli lista specifica
+- ✅ `/lista [nome] add [item]` - Aggiungi elemento (crea lista se non esiste)
+  - Esempio: `/lista Spesa add Latte`
+  - Esempio: `/lista Spesa add 2 kg Pasta` (con quantità e unità)
+- ✅ `/lista [nome] check [id]` - Segna elemento come completato/da fare
+- ✅ `/lista [nome] remove [id]` - Rimuovi elemento
+- ✅ `/lista [nome] clear` - Rimuovi tutti gli elementi completati
+- ✅ **Liste condivise per chat** - tutti nella chat vedono gli stessi aggiornamenti
+- ✅ **Parsing intelligente** quantità e unità (2 kg, 3 lt, ecc.)
+- ✅ **Separazione visiva** elementi da comprare vs completati
+- ✅ **Database tracking** con posizionamento ordinato
+- ✅ **Rate limiting** protezione spam (light - 20 req/min)
 
 ### 🤖 Risposte Automatiche
 - Risposte basate su keywords
@@ -168,6 +200,29 @@ Chat e gruppi registrati per ogni bot.
 - `data` - Dati JSON aggiuntivi
 - `created_at` - Timestamp (no updated_at)
 
+### reminders
+- `telegraph_bot_id` - Bot associato
+- `telegraph_chat_id` - Chat associata
+- `message` - Messaggio del promemoria
+- `remind_at` - Data/ora invio promemoria
+- `is_sent` - Flag invio completato
+- `sent_at` - Data/ora invio effettivo
+
+### shopping_lists
+- `telegraph_bot_id` - Bot associato
+- `telegraph_chat_id` - Chat associata (liste condivise per chat)
+- `name` - Nome lista
+- `description` - Descrizione (nullable)
+- `is_active` - Attivo/disattivo
+
+### shopping_list_items
+- `shopping_list_id` - Lista associata
+- `name` - Nome elemento
+- `quantity` - Quantità (default 1)
+- `unit` - Unità misura (nullable)
+- `is_checked` - Elemento completato
+- `position` - Posizione ordinamento
+
 Tipi evento log:
 - `message_received` - Messaggio ricevuto
 - `message_sent` - Messaggio inviato
@@ -191,6 +246,9 @@ Tipi evento log:
 - `App\Models\BotCommand` - Comandi bot
 - `App\Models\BotLog` - Log sistema
 - `App\Models\ShortenedUrl` - URL accorciati
+- `App\Models\Reminder` - Promemoria e timer ✨ NUOVO
+- `App\Models\ShoppingList` - Liste della spesa ✨ NUOVO
+- `App\Models\ShoppingListItem` - Elementi liste spesa ✨ NUOVO
 - `DefStudio\Telegraph\Models\TelegraphBot` - Bot (package)
 - `DefStudio\Telegraph\Models\TelegraphChat` - Chat (package)
 
@@ -207,6 +265,12 @@ Tipi evento log:
 
 ### Services
 - `FiscalCodeCalculator` - Servizio per calcolo codice fiscale italiano
+- `SafeMathCalculator` - Servizio per calcolo matematico sicuro (Shunting Yard)
+- `BotRateLimiter` - Servizio per rate limiting comandi bot
+
+### Scheduled Commands
+- `SendDueRemindersCommand` - Invio promemoria scaduti (ogni minuto)
+- `MonitorRssFeedsCommand` - Monitoraggio feed RSS (ogni minuto)
 
 ### Webhook Handler
 `App\TelegramWebhookHandler` - Handler principale per webhook Telegram:
@@ -314,18 +378,12 @@ https://your-domain.com/telegraph/{bot_token}/webhook
 
 Il sistema è progettato per essere estensibile con:
 - Convertitori file (PDF, immagini, documenti)
-- Liste della spesa condivise
 - Scheduling post su canali
 - Webcam italiane
 - Tracker prezzi (Amazon, AliExpress, voli, hotel)
 - Email temporanee
 - Statistiche utenti gruppi/canali avanzate
 - Ricerca film/serie TV (IMDb, Netflix)
-- OCR per estrazione testo da immagini
-- Traduttore multi-lingua API
-- Promemoria e timer
-- Weather forecast API
-- News aggregator
 
 ## 📝 Note Tecniche
 
@@ -351,13 +409,15 @@ Questo progetto è sviluppato per uso interno.
 
 ## ⏰ Laravel Scheduler Setup
 
-Per abilitare il monitoraggio automatico RSS, aggiungi questo comando al tuo crontab:
+Per abilitare il monitoraggio automatico RSS e l'invio promemoria, aggiungi questo comando al tuo crontab:
 
 ```bash
 * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Il sistema verificherà automaticamente ogni minuto quali feed devono essere controllati (in base al `check_interval` configurato).
+Il sistema verificherà automaticamente ogni minuto:
+- Quali feed RSS devono essere controllati (in base al `check_interval` configurato)
+- Quali promemoria devono essere inviati (in base al `remind_at` configurato)
 
 ### Comandi Manuali Disponibili
 
@@ -367,6 +427,9 @@ php artisan telegram:monitor-rss
 
 # Controlla un feed specifico
 php artisan telegram:monitor-rss --feed=1
+
+# Invia promemoria scaduti
+php artisan reminders:send
 
 # Visualizza i job nella queue
 php artisan queue:work
