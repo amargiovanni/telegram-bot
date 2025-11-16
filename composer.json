@@ -9,8 +9,10 @@
         "php": "^8.2",
         "bezhansalleh/filament-shield": "^3.2",
         "dedoc/scramble": "^0.12.36",
+        "defstudio/telegraph": "^1.64",
         "dev-to-geek/laravel-init": "^0.1.6",
         "driftingly/rector-laravel": "^2.1",
+        "endroid/qr-code": "^6.0",
         "filament/filament": "^3.2",
         "filament/spatie-laravel-media-library-plugin": "^3.2",
         "filament/spatie-laravel-settings-plugin": "^3.2",
@@ -26,7 +28,8 @@
         "oltrematica/laravel-ratelimiter": "^1.0",
         "spatie/laravel-activitylog": "^4.10",
         "spatie/laravel-medialibrary": "^11.17",
-        "spatie/laravel-permission": "^6.23"
+        "spatie/laravel-permission": "^6.23",
+        "willvincent/feeds": "^2.7"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",
