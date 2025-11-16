@@ -20,6 +20,17 @@ Sistema completo e configurabile per gestire multipli bot Telegram attraverso un
 - ✅ **Error handling** completo con logging
 - ✅ **Comando manuale** disponibile: `php artisan telegram:monitor-rss`
 
+### 🔗 URL Shortener
+- ✅ **Accorciamento URL** via comando `/shorten`
+- ✅ **Generazione automatica** short code univoco (6 caratteri)
+- ✅ **Tracking click** con contatore visualizzazioni
+- ✅ **Scadenza URL** configurabile (opzionale)
+- ✅ **Gestione admin** completa tramite Filament
+- ✅ **Statistiche** per bot e per URL
+- ✅ **Logging completo** di creazione e redirect
+- ✅ **Copy to clipboard** per short URL
+- ✅ **Endpoint pubblico**: `/s/{code}` con redirect automatico
+
 ### 🤖 Risposte Automatiche
 - Risposte basate su keywords
 - Multiple modalità di matching:
@@ -94,6 +105,15 @@ Chat e gruppi registrati per ogni bot.
 - `show_in_menu` - Mostra in menu Telegram
 - `allowed_chat_ids` - Chat consentite (JSON array)
 
+### shortened_urls
+- `telegraph_bot_id` - Bot associato
+- `telegraph_chat_id` - Chat che ha creato URL (nullable)
+- `original_url` - URL originale lungo
+- `short_code` - Codice breve univoco (6 caratteri)
+- `click_count` - Contatore click/redirect
+- `expires_at` - Data scadenza (nullable)
+- `is_active` - Attivo/disattivo
+
 ### bot_logs
 - `telegraph_bot_id` - Bot associato (nullable)
 - `telegraph_chat_id` - Chat associata (nullable)
@@ -109,6 +129,8 @@ Tipi evento log:
 - `auto_response_triggered` - Risposta automatica attivata
 - `rss_check` - Controllo RSS
 - `rss_posted` - RSS pubblicato
+- `url_shortened` - URL accorciato
+- `url_redirect` - Redirect URL eseguito
 - `error` - Errore
 - `webhook_received` - Webhook ricevuto
 - `chat_registered` - Chat registrata
@@ -122,6 +144,7 @@ Tipi evento log:
 - `App\Models\AutoResponse` - Risposte automatiche
 - `App\Models\BotCommand` - Comandi bot
 - `App\Models\BotLog` - Log sistema
+- `App\Models\ShortenedUrl` - URL accorciati
 - `DefStudio\Telegraph\Models\TelegraphBot` - Bot (package)
 - `DefStudio\Telegraph\Models\TelegraphChat` - Chat (package)
 
@@ -130,14 +153,19 @@ Tipi evento log:
 - `RssFeedResource` - Gestione feed RSS
 - `AutoResponseResource` - Gestione risposte automatiche
 - `BotCommandResource` - Gestione comandi
+- `ShortenedUrlResource` - Gestione URL accorciati
 - `BotLogResource` - Visualizzazione log (read-only)
+
+### Controllers
+- `UrlRedirectController` - Gestisce redirect da short code a URL originale
 
 ### Webhook Handler
 `App\TelegramWebhookHandler` - Handler principale per webhook Telegram:
 - Gestione messaggi in arrivo
-- Esecuzione comandi custom
+- Esecuzione comandi custom (`/start`, `/help`, `/shorten`)
 - Trigger risposte automatiche
 - Registrazione automatica chat
+- URL shortening via `/shorten`
 - Logging completo attività
 
 ## 🔧 Setup e Configurazione
@@ -199,6 +227,26 @@ https://your-domain.com/telegraph/{bot_token}/webhook
 5. Configura risposta
 6. Abilita "Show in Menu" per visibilità in Telegram
 
+### Usare URL Shortener
+**Via Bot Telegram:**
+1. Scrivi al bot: `/shorten https://example.com/very-long-url`
+2. Il bot risponde con l'URL accorciato
+3. L'URL è subito utilizzabile e tracciato
+
+**Via Admin Panel:**
+1. Admin > Shortened URLs > Create
+2. Seleziona bot
+3. Inserisci URL originale
+4. (Opzionale) Inserisci short code personalizzato
+5. (Opzionale) Imposta scadenza
+6. Salva e copia l'URL accorciato
+
+**Monitoraggio:**
+- Visualizza tutti gli URL accorciati nell'admin
+- Controlla statistiche click per ogni URL
+- Filtra per bot o stato attivo/scaduto
+- Copy to clipboard integrato
+
 ### Monitorare Log
 1. Admin > Bot Logs
 2. Filtra per tipo evento o bot
@@ -217,11 +265,10 @@ https://your-domain.com/telegraph/{bot_token}/webhook
 Il sistema è progettato per essere estensibile con:
 - Convertitori file (PDF, immagini, documenti)
 - Calcolo codice fiscale
-- Accorciamento URL
 - Liste della spesa condivise
 - Scheduling post su canali
 - Webcam italiane
-- Tracker prezzi (Amazon, AliExpress)
+- Tracker prezzi (Amazon, AliExpress, voli, hotel)
 - Email temporanee
 - Statistiche utenti gruppi/canali
 - Giochi (Sudoku, Quiz, dadi)

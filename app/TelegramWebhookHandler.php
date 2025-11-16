@@ -7,8 +7,10 @@ namespace App;
 use App\Models\AutoResponse;
 use App\Models\BotCommand;
 use App\Models\BotLog;
+use App\Models\ShortenedUrl;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
 use DefStudio\Telegraph\Models\TelegraphChat;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Stringable;
 
 class TelegramWebhookHandler extends WebhookHandler
@@ -40,6 +42,52 @@ class TelegramWebhookHandler extends WebhookHandler
         }
 
         $this->chat->html($helpText)->send();
+    }
+
+    public function shorten(): void
+    {
+        $text = $this->message->text();
+        $url = trim(str_replace('/shorten', '', $text));
+
+        // Validate URL
+        $validator = Validator::make(['url' => $url], [
+            'url' => 'required|url|max:2000',
+        ]);
+
+        if ($validator->fails()) {
+            $this->chat->html("❌ <b>Invalid URL</b>\n\nPlease provide a valid URL.\n\nExample: <code>/shorten https://example.com</code>")->send();
+
+            return;
+        }
+
+        // Create shortened URL
+        $shortenedUrl = ShortenedUrl::create([
+            'telegraph_bot_id' => $this->bot->id,
+            'telegraph_chat_id' => $this->chat->id,
+            'original_url' => $url,
+            'short_code' => ShortenedUrl::generateUniqueCode(),
+            'is_active' => true,
+        ]);
+
+        // Log the creation
+        BotLog::log(
+            'url_shortened',
+            $this->bot->id,
+            $this->chat->id,
+            "URL shortened: {$shortenedUrl->short_code}",
+            [
+                'short_code' => $shortenedUrl->short_code,
+                'original_url' => $url,
+                'short_url' => $shortenedUrl->getShortUrl(),
+            ]
+        );
+
+        // Send response with shortened URL
+        $response = "✅ <b>URL Shortened!</b>\n\n";
+        $response .= "🔗 Short URL: <code>{$shortenedUrl->getShortUrl()}</code>\n\n";
+        $response .= "📊 Original: <i>{$url}</i>";
+
+        $this->chat->html($response)->send();
     }
 
     public function onChatMemberUpdated(): void

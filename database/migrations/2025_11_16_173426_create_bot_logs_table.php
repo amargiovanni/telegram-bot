@@ -29,6 +29,8 @@ return new class extends Migration
                 'chat_registered',
                 'bot_added_to_group',
                 'bot_removed_from_group',
+                'url_shortened',
+                'url_redirect',
             ]);
             $table->string('message')->nullable();
             $table->json('data')->nullable();

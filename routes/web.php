@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\UrlRedirectController;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use Illuminate\Support\Facades\Route;
+
+// URL Shortener redirect
+Route::get('/s/{code}', [UrlRedirectController::class, 'redirect'])->name('url.redirect');
 
 Route::get('/', function () {
     return view('welcome');
