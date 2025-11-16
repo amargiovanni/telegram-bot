@@ -31,6 +31,26 @@ Sistema completo e configurabile per gestire multipli bot Telegram attraverso un
 - ✅ **Copy to clipboard** per short URL
 - ✅ **Endpoint pubblico**: `/s/{code}` con redirect automatico
 
+### 🆔 Calcolo Codice Fiscale
+- ✅ **Calcolo automatico** codice fiscale italiano
+- ✅ **Comando `/cf`** con parametri strutturati
+- ✅ **Validazione completa** dei dati in input
+- ✅ **Algoritmo ufficiale** con tutti i casi speciali
+- ✅ **Help integrato** con esempi d'uso
+- ✅ **Supporto codici Belfiore** per comuni italiani
+- ✅ **Formato**: `/cf Cognome|Nome|GG/MM/AAAA|M/F|CodiceComune`
+
+### 😄 Comandi Divertenti
+Comandi scherzosi e irriverenti per intrattenimento:
+- `/barzelletta` - Barzellette a tema tech
+- `/insulto` - Insulti friendly e scherzosi
+- `/motivazione` - Citazioni motivazionali (con twist)
+- `/consiglio` - Consigli (a volte assurdi)
+- `/fortuna` - Biscotto della fortuna
+- `/decisione [domanda]` - Ti aiuta a decidere
+- `/pizza` - Consiglia una pizza random
+- `/scusa` - Scuse pronte per sviluppatori
+
 ### 🤖 Risposte Automatiche
 - Risposte basate su keywords
 - Multiple modalità di matching:
@@ -159,13 +179,17 @@ Tipi evento log:
 ### Controllers
 - `UrlRedirectController` - Gestisce redirect da short code a URL originale
 
+### Services
+- `FiscalCodeCalculator` - Servizio per calcolo codice fiscale italiano
+
 ### Webhook Handler
 `App\TelegramWebhookHandler` - Handler principale per webhook Telegram:
 - Gestione messaggi in arrivo
-- Esecuzione comandi custom (`/start`, `/help`, `/shorten`)
+- Esecuzione comandi built-in (`/start`, `/help`, `/shorten`, `/cf`)
+- Comandi divertenti (`/barzelletta`, `/insulto`, `/motivazione`, `/consiglio`, `/fortuna`, `/decisione`, `/pizza`, `/scusa`)
 - Trigger risposte automatiche
 - Registrazione automatica chat
-- URL shortening via `/shorten`
+- URL shortening e fiscal code calculation
 - Logging completo attività
 
 ## 🔧 Setup e Configurazione
@@ -264,7 +288,6 @@ https://your-domain.com/telegraph/{bot_token}/webhook
 
 Il sistema è progettato per essere estensibile con:
 - Convertitori file (PDF, immagini, documenti)
-- Calcolo codice fiscale
 - Liste della spesa condivise
 - Scheduling post su canali
 - Webcam italiane
@@ -273,6 +296,9 @@ Il sistema è progettato per essere estensibile con:
 - Statistiche utenti gruppi/canali
 - Giochi (Sudoku, Quiz, dadi)
 - Ricerca film/serie TV (IMDb, Netflix)
+- OCR per estrazione testo da immagini
+- Generatore QR code
+- Traduttore multi-lingua
 
 ## 📝 Note Tecniche
 
