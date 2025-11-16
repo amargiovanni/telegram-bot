@@ -40,16 +40,30 @@ Sistema completo e configurabile per gestire multipli bot Telegram attraverso un
 - ✅ **Supporto codici Belfiore** per comuni italiani
 - ✅ **Formato**: `/cf Cognome|Nome|GG/MM/AAAA|M/F|CodiceComune`
 
+### 🔧 Utility e Tools
+Strumenti pratici per uso quotidiano:
+- ✅ `/qr [testo/url]` - Generatore QR Code con immagine
+- ✅ `/password [lunghezza]` - Password sicure (8-64 caratteri)
+- ✅ `/calc [espressione]` - Calcolatrice matematica
+- ✅ `/info` - Informazioni bot e lista comandi completa
+
+### 🎮 Giochi e Intrattenimento
+Giochi e passatempi interattivi:
+- ✅ `/dado [numero]` - Lancia 1-10 dadi (emoji grafici)
+- ✅ `/moneta` - Testa o Croce
+- ✅ `/quiz` - Quiz tech random con risposta nascosta
+- ✅ `/indovina` - Indovina il numero (1-100)
+
 ### 😄 Comandi Divertenti
 Comandi scherzosi e irriverenti per intrattenimento:
-- `/barzelletta` - Barzellette a tema tech
-- `/insulto` - Insulti friendly e scherzosi
-- `/motivazione` - Citazioni motivazionali (con twist)
-- `/consiglio` - Consigli (a volte assurdi)
-- `/fortuna` - Biscotto della fortuna
-- `/decisione [domanda]` - Ti aiuta a decidere
-- `/pizza` - Consiglia una pizza random
-- `/scusa` - Scuse pronte per sviluppatori
+- ✅ `/barzelletta` - Barzellette a tema tech (10 varianti)
+- ✅ `/insulto` - Insulti friendly e scherzosi (10 varianti)
+- ✅ `/motivazione` - Citazioni motivazionali con twist (10 varianti)
+- ✅ `/consiglio` - Consigli a volte assurdi (10 varianti)
+- ✅ `/fortuna` - Biscotto della fortuna (10 varianti)
+- ✅ `/decisione [domanda]` - Ti aiuta a decidere (15 risposte)
+- ✅ `/pizza` - Consiglia una pizza random (12 tipi)
+- ✅ `/scusa` - Scuse pronte per sviluppatori (15 varianti)
 
 ### 🤖 Risposte Automatiche
 - Risposte basate su keywords
@@ -293,12 +307,13 @@ Il sistema è progettato per essere estensibile con:
 - Webcam italiane
 - Tracker prezzi (Amazon, AliExpress, voli, hotel)
 - Email temporanee
-- Statistiche utenti gruppi/canali
-- Giochi (Sudoku, Quiz, dadi)
+- Statistiche utenti gruppi/canali avanzate
 - Ricerca film/serie TV (IMDb, Netflix)
 - OCR per estrazione testo da immagini
-- Generatore QR code
-- Traduttore multi-lingua
+- Traduttore multi-lingua API
+- Promemoria e timer
+- Weather forecast API
+- News aggregator
 
 ## 📝 Note Tecniche
 

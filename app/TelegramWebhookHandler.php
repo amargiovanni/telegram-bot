@@ -11,8 +11,13 @@ use App\Models\ShortenedUrl;
 use App\Services\FiscalCodeCalculator;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
 use DefStudio\Telegraph\Models\TelegraphChat;
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Encoding\Encoding;
+use Endroid\QrCode\Writer\PngWriter;
 use Exception;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
 
 class TelegramWebhookHandler extends WebhookHandler
@@ -362,6 +367,232 @@ class TelegramWebhookHandler extends WebhookHandler
         $this->chat->html("😅 <b>Scusa Pronta:</b>\n\n{$excuse}\n\n<i>Usa con moderazione! 😉</i>")->send();
     }
 
+    public function qr(): void
+    {
+        $text = $this->message->text();
+        $data = trim(str_replace('/qr', '', $text));
+
+        if (empty($data)) {
+            $helpMessage = "📱 <b>Generatore QR Code</b>\n\n";
+            $helpMessage .= "Invia il testo o URL da codificare:\n";
+            $helpMessage .= "<code>/qr https://example.com</code>\n\n";
+            $helpMessage .= "Oppure un testo qualsiasi:\n";
+            $helpMessage .= '<code>/qr Il mio testo segreto</code>';
+
+            $this->chat->html($helpMessage)->send();
+
+            return;
+        }
+
+        try {
+            $result = Builder::create()
+                ->writer(new PngWriter)
+                ->data($data)
+                ->encoding(new Encoding('UTF-8'))
+                ->size(400)
+                ->margin(10)
+                ->build();
+
+            $filename = 'qr_'.Str::random(10).'.png';
+            $path = 'temp/'.$filename;
+
+            Storage::put($path, $result->getString());
+            $fullPath = Storage::path($path);
+
+            $this->chat->photo($fullPath)->send();
+
+            Storage::delete($path);
+
+            BotLog::log(
+                'command_executed',
+                $this->bot->id,
+                $this->chat->id,
+                'QR code generated',
+                ['data' => Str::limit($data, 100)]
+            );
+        } catch (Exception $e) {
+            $this->chat->html("❌ <b>Errore nella generazione del QR code!</b>\n\nRiprova con un testo più breve.")->send();
+        }
+    }
+
+    public function dado(): void
+    {
+        $text = $this->message->text();
+        $params = trim(str_replace('/dado', '', $text));
+
+        // Parse number of dice (default 1, max 10)
+        $numDice = 1;
+        if (! empty($params) && is_numeric($params)) {
+            $numDice = max(1, min(10, (int) $params));
+        }
+
+        $results = [];
+        $total = 0;
+
+        for ($i = 0; $i < $numDice; $i++) {
+            $roll = rand(1, 6);
+            $results[] = $this->getDiceEmoji($roll);
+            $total += $roll;
+        }
+
+        $response = '🎲 <b>Lancio '.($numDice === 1 ? 'del dado' : "di {$numDice} dadi").":</b>\n\n";
+        $response .= implode(' ', $results)."\n\n";
+
+        if ($numDice > 1) {
+            $response .= "📊 Totale: <b>{$total}</b>";
+        }
+
+        $this->chat->html($response)->send();
+    }
+
+    public function quiz(): void
+    {
+        $quizzes = [
+            ['q' => 'Qual è il linguaggio di programmazione più usato al mondo?', 'a' => 'JavaScript'],
+            ['q' => 'Chi ha creato Linux?', 'a' => 'Linus Torvalds'],
+            ['q' => 'Cosa significa HTML?', 'a' => 'HyperText Markup Language'],
+            ['q' => 'In che anno è nato PHP?', 'a' => '1995'],
+            ['q' => 'Qual è la porta di default per HTTP?', 'a' => '80'],
+            ['q' => 'Cosa significa CSS?', 'a' => 'Cascading Style Sheets'],
+            ['q' => 'Chi ha creato Python?', 'a' => 'Guido van Rossum'],
+            ['q' => 'Qual è il protocollo sicuro di HTTP?', 'a' => 'HTTPS'],
+            ['q' => 'Cosa significa SQL?', 'a' => 'Structured Query Language'],
+            ['q' => 'In che anno è stato rilasciato il primo iPhone?', 'a' => '2007'],
+        ];
+
+        $quiz = $quizzes[array_rand($quizzes)];
+
+        $response = "🧠 <b>Quiz Tech!</b>\n\n";
+        $response .= "❓ {$quiz['q']}\n\n";
+        $response .= "<i>Risposta nascosta qui sotto... </i>\n";
+        $response .= "<tg-spoiler>{$quiz['a']}</tg-spoiler>";
+
+        $this->chat->html($response)->send();
+    }
+
+    public function password(): void
+    {
+        $text = $this->message->text();
+        $params = trim(str_replace('/password', '', $text));
+
+        $length = 16;
+        if (! empty($params) && is_numeric($params)) {
+            $length = max(8, min(64, (int) $params));
+        }
+
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+        $password = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $password .= $chars[rand(0, strlen($chars) - 1)];
+        }
+
+        $strength = $this->evaluatePasswordStrength($password);
+
+        $response = "🔐 <b>Password Generata!</b>\n\n";
+        $response .= "Password: <code>{$password}</code>\n\n";
+        $response .= "📏 Lunghezza: {$length} caratteri\n";
+        $response .= "💪 Sicurezza: {$strength}\n\n";
+        $response .= '<i>Clicca per copiare!</i>';
+
+        $this->chat->html($response)->send();
+    }
+
+    public function calc(): void
+    {
+        $text = $this->message->text();
+        $expression = trim(str_replace('/calc', '', $text));
+
+        if (empty($expression)) {
+            $helpMessage = "🧮 <b>Calcolatrice</b>\n\n";
+            $helpMessage .= "Invia un'espressione matematica:\n";
+            $helpMessage .= "<code>/calc 2 + 2</code>\n";
+            $helpMessage .= "<code>/calc 10 * 5 + 3</code>\n";
+            $helpMessage .= "<code>/calc (100 - 20) / 4</code>\n\n";
+            $helpMessage .= 'Operatori: + - * / ( )';
+
+            $this->chat->html($helpMessage)->send();
+
+            return;
+        }
+
+        // Clean and validate expression
+        $expression = preg_replace('/[^0-9+\-*\/().\s]/', '', $expression);
+
+        if (empty($expression)) {
+            $this->chat->html('❌ <b>Espressione non valida!</b>')->send();
+
+            return;
+        }
+
+        try {
+            // Use eval carefully with cleaned input
+            $result = @eval("return {$expression};");
+
+            if ($result === false || ! is_numeric($result)) {
+                throw new Exception('Invalid calculation');
+            }
+
+            $response = "🧮 <b>Risultato:</b>\n\n";
+            $response .= "<code>{$expression}</code>\n";
+            $response .= '= <b>'.number_format($result, 2, ',', '.').'</b>';
+
+            $this->chat->html($response)->send();
+        } catch (Exception $e) {
+            $this->chat->html("❌ <b>Errore nel calcolo!</b>\n\nVerifica l'espressione e riprova.")->send();
+        }
+    }
+
+    public function moneta(): void
+    {
+        $result = rand(0, 1) === 1 ? 'Testa' : 'Croce';
+        $emoji = $result === 'Testa' ? '🪙' : '💰';
+
+        $response = "🎲 <b>Lancio della Moneta</b>\n\n";
+        $response .= "{$emoji} <b>{$result}!</b>";
+
+        $this->chat->html($response)->send();
+    }
+
+    public function indovina(): void
+    {
+        $number = rand(1, 100);
+
+        $response = "🎯 <b>Indovina il Numero!</b>\n\n";
+        $response .= "Ho pensato a un numero tra 1 e 100.\n";
+        $response .= "Prova a indovinarlo!\n\n";
+        $response .= "<i>Numero nascosto qui sotto...</i>\n";
+        $response .= "<tg-spoiler>{$number}</tg-spoiler>\n\n";
+        $response .= '💡 Scoprilo con un click!';
+
+        $this->chat->html($response)->send();
+    }
+
+    public function info(): void
+    {
+        $response = "ℹ️ <b>Informazioni Bot</b>\n\n";
+        $response .= "🤖 Bot: {$this->bot->name}\n";
+        $response .= "💬 Chat: {$this->chat->name}\n";
+        $response .= "🆔 Chat ID: <code>{$this->chat->chat_id}</code>\n\n";
+        $response .= "⚡ <b>Comandi Disponibili:</b>\n";
+        $response .= "/help - Lista comandi\n";
+        $response .= "/qr - Genera QR code\n";
+        $response .= "/shorten - Accorcia URL\n";
+        $response .= "/cf - Codice fiscale\n";
+        $response .= "/password - Genera password\n";
+        $response .= "/calc - Calcolatrice\n";
+        $response .= "/dado - Lancia dadi\n";
+        $response .= "/moneta - Lancia moneta\n";
+        $response .= "/quiz - Quiz random\n";
+        $response .= "/indovina - Indovina numero\n\n";
+        $response .= "😄 <b>Fun:</b>\n";
+        $response .= "/barzelletta /insulto /motivazione\n";
+        $response .= "/consiglio /fortuna /decisione\n";
+        $response .= '/pizza /scusa';
+
+        $this->chat->html($response)->send();
+    }
+
     public function onChatMemberUpdated(): void
     {
         $update = $this->data->get('my_chat_member');
@@ -523,5 +754,37 @@ class TelegramWebhookHandler extends WebhookHandler
                 ['chat_id' => $chatId]
             );
         }
+    }
+
+    private function getDiceEmoji(int $number): string
+    {
+        return match ($number) {
+            1 => '⚀',
+            2 => '⚁',
+            3 => '⚂',
+            4 => '⚃',
+            5 => '⚄',
+            6 => '⚅',
+            default => '🎲',
+        };
+    }
+
+    private function evaluatePasswordStrength(string $password): string
+    {
+        $length = strlen($password);
+
+        if ($length >= 20) {
+            return '🟢 Fortissima';
+        }
+
+        if ($length >= 16) {
+            return '🟡 Forte';
+        }
+
+        if ($length >= 12) {
+            return '🟠 Media';
+        }
+
+        return '🔴 Debole';
     }
 }
