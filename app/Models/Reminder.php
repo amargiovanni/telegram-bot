@@ -23,6 +23,10 @@ class Reminder extends Model
         'sent_at',
     ];
 
+    protected $attributes = [
+        'is_sent' => false,
+    ];
+
     public function bot(): BelongsTo
     {
         return $this->belongsTo(TelegraphBot::class, 'telegraph_bot_id');

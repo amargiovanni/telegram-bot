@@ -24,6 +24,7 @@ return new class extends Migration
                 'auto_response_triggered',
                 'rss_check',
                 'rss_posted',
+                'reminder_sent',
                 'error',
                 'webhook_received',
                 'chat_registered',
