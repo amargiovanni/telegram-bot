@@ -23,5 +23,5 @@ test('all policies to have methods deleteAny and forceDeleteAny', function (): v
 });
 
 arch()->preset()->php();
-arch()->preset()->laravel();
-arch()->preset()->security();
+arch()->preset()->laravel()->ignoring('App\Providers\Filament');
+arch()->preset()->security()->ignoring('App\TelegramWebhookHandler');

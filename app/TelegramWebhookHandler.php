@@ -9,6 +9,7 @@ use App\Models\BotCommand;
 use App\Models\BotLog;
 use App\Models\ShortenedUrl;
 use App\Services\FiscalCodeCalculator;
+use App\Services\SafeMathCalculator;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
 use DefStudio\Telegraph\Models\TelegraphChat;
 use Endroid\QrCode\Builder\Builder;
@@ -430,7 +431,7 @@ class TelegramWebhookHandler extends WebhookHandler
         $total = 0;
 
         for ($i = 0; $i < $numDice; $i++) {
-            $roll = rand(1, 6);
+            $roll = random_int(1, 6);
             $results[] = $this->getDiceEmoji($roll);
             $total += $roll;
         }
@@ -483,8 +484,9 @@ class TelegramWebhookHandler extends WebhookHandler
         $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
         $password = '';
 
+        // Use cryptographically secure random_int() instead of rand()
         for ($i = 0; $i < $length; $i++) {
-            $password .= $chars[rand(0, strlen($chars) - 1)];
+            $password .= $chars[random_int(0, strlen($chars) - 1)];
         }
 
         $strength = $this->evaluatePasswordStrength($password);
@@ -516,22 +518,10 @@ class TelegramWebhookHandler extends WebhookHandler
             return;
         }
 
-        // Clean and validate expression
-        $expression = preg_replace('/[^0-9+\-*\/().\s]/', '', $expression);
-
-        if (empty($expression)) {
-            $this->chat->html('❌ <b>Espressione non valida!</b>')->send();
-
-            return;
-        }
-
         try {
-            // Use eval carefully with cleaned input
-            $result = @eval("return {$expression};");
-
-            if ($result === false || ! is_numeric($result)) {
-                throw new Exception('Invalid calculation');
-            }
+            // Use SafeMathCalculator instead of dangerous eval()
+            $calculator = new SafeMathCalculator;
+            $result = $calculator->calculate($expression);
 
             $response = "🧮 <b>Risultato:</b>\n\n";
             $response .= "<code>{$expression}</code>\n";
@@ -545,7 +535,7 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function moneta(): void
     {
-        $result = rand(0, 1) === 1 ? 'Testa' : 'Croce';
+        $result = random_int(0, 1) === 1 ? 'Testa' : 'Croce';
         $emoji = $result === 'Testa' ? '🪙' : '💰';
 
         $response = "🎲 <b>Lancio della Moneta</b>\n\n";
@@ -556,7 +546,7 @@ class TelegramWebhookHandler extends WebhookHandler
 
     public function indovina(): void
     {
-        $number = rand(1, 100);
+        $number = random_int(1, 100);
 
         $response = "🎯 <b>Indovina il Numero!</b>\n\n";
         $response .= "Ho pensato a un numero tra 1 e 100.\n";

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\LogsActivityAllDirty;
 use DefStudio\Telegraph\Models\TelegraphBot;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BotCommand extends Model
 {
+    use LogsActivityAllDirty;
+
     protected $fillable = [
         'telegraph_bot_id',
         'command',

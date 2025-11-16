@@ -10,7 +10,7 @@ use Illuminate\Http\RedirectResponse;
 
 class UrlRedirectController extends Controller
 {
-    public function redirect(string $code): RedirectResponse
+    public function __invoke(string $code): RedirectResponse
     {
         $shortenedUrl = ShortenedUrl::where('short_code', $code)
             ->active()
