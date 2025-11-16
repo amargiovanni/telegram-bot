@@ -15,3 +15,9 @@ Schedule::command('telegram:monitor-rss')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Send Due Reminders - runs every minute
+Schedule::command('reminders:send')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();

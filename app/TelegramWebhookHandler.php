@@ -7,6 +7,7 @@ namespace App;
 use App\Models\AutoResponse;
 use App\Models\BotCommand;
 use App\Models\BotLog;
+use App\Models\Reminder;
 use App\Models\ShortenedUrl;
 use App\Services\BotRateLimiter;
 use App\Services\FiscalCodeCalculator;
@@ -605,6 +606,9 @@ class TelegramWebhookHandler extends WebhookHandler
         $response .= "/calc - Calcolatrice\n";
         $response .= "/meteo - Previsioni meteo\n";
         $response .= "/traduci - Traduci testo\n";
+        $response .= "/ocr - Estrai testo da immagine\n";
+        $response .= "/news - Ultime notizie\n";
+        $response .= "/promemoria - Imposta promemoria\n";
         $response .= "/dado - Lancia dadi\n";
         $response .= "/moneta - Lancia moneta\n";
         $response .= "/quiz - Quiz random\n";
@@ -615,6 +619,316 @@ class TelegramWebhookHandler extends WebhookHandler
         $response .= '/pizza /scusa';
 
         $this->chat->html($response)->send();
+    }
+
+    public function ocr(): void
+    {
+        // Rate limiting
+        if (! $this->checkRateLimit('ocr', 'heavy')) {
+            return;
+        }
+
+        $helpMessage = "📸 <b>OCR - Estrazione Testo</b>\n\n";
+        $helpMessage .= "Invia un'immagine con testo e usa il comando:\n";
+        $helpMessage .= "<code>/ocr</code>\n\n";
+        $helpMessage .= "Supporta: screenshot, documenti, foto, meme\n";
+        $helpMessage .= 'Lingue: ITA, ENG, ESP, FRA, DEU';
+
+        // Check if message has photo
+        if (! $this->message->photos() || count($this->message->photos()) === 0) {
+            $this->chat->html($helpMessage)->send();
+
+            return;
+        }
+
+        try {
+            // Get the largest photo
+            $photos = $this->message->photos();
+            $photo = end($photos);
+
+            // Download photo from Telegram
+            $fileId = $photo['file_id'];
+            $file = $this->bot->getFile($fileId);
+            $filePath = $file['result']['file_path'];
+            $fileUrl = "https://api.telegram.org/file/bot{$this->bot->token}/{$filePath}";
+
+            // Use OCR.space API (free tier, no key required for basic usage)
+            $ch = curl_init('https://api.ocr.space/parse/imageurl');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, [
+                'url' => $fileUrl,
+                'language' => 'ita',
+                'isOverlayRequired' => false,
+                'detectOrientation' => true,
+                'scale' => true,
+                'OCREngine' => 2,
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+            $result = curl_exec($ch);
+            curl_close($ch);
+
+            if (! $result) {
+                throw new Exception('OCR service unavailable');
+            }
+
+            $data = json_decode($result, true);
+
+            if (! isset($data['ParsedResults']) || empty($data['ParsedResults'])) {
+                throw new Exception('No text found in image');
+            }
+
+            $text = trim($data['ParsedResults'][0]['ParsedText']);
+
+            if (empty($text)) {
+                $this->chat->html("❌ <b>Nessun testo trovato!</b>\n\nL'immagine non contiene testo leggibile.")->send();
+
+                return;
+            }
+
+            $response = "📝 <b>Testo Estratto:</b>\n\n";
+            $response .= "<code>{$text}</code>\n\n";
+            $response .= '💡 <i>Clicca per copiare il testo</i>';
+
+            $this->chat->html($response)->send();
+
+            BotLog::log(
+                'command_executed',
+                $this->bot->id,
+                $this->chat->id,
+                'OCR text extracted',
+                ['text_length' => strlen($text)]
+            );
+        } catch (Exception $e) {
+            $this->chat->html("❌ <b>Errore OCR!</b>\n\nImpossibile estrarre il testo dall'immagine.")->send();
+
+            BotLog::log(
+                'error',
+                $this->bot->id,
+                $this->chat->id,
+                'OCR extraction error',
+                ['error' => $e->getMessage()]
+            );
+        }
+    }
+
+    public function news(): void
+    {
+        // Rate limiting
+        if (! $this->checkRateLimit('news', 'medium')) {
+            return;
+        }
+
+        $text = $this->message->text();
+        $category = strtolower(trim(str_replace('/news', '', $text)));
+
+        try {
+            // Use NewsAPI (free tier allows limited requests)
+            // For production, you'd need an API key from newsapi.org
+            // For now, using a public RSS-to-JSON service
+
+            $categories = [
+                'tech' => 'https://www.reddit.com/r/technology/.json?limit=5',
+                'world' => 'https://www.reddit.com/r/worldnews/.json?limit=5',
+                'italia' => 'https://www.reddit.com/r/italy/.json?limit=5',
+                '' => 'https://www.reddit.com/r/technology/.json?limit=5',
+            ];
+
+            $url = $categories[$category] ?? $categories[''];
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'TelegramBot/1.0');
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200 || ! $result) {
+                throw new Exception('News service unavailable');
+            }
+
+            $data = json_decode($result, true);
+
+            if (! isset($data['data']['children']) || empty($data['data']['children'])) {
+                throw new Exception('No news found');
+            }
+
+            $response = "📰 <b>Ultime Notizie</b>\n";
+            $response .= '<i>Categoria: '.($category ?: 'Tech')."</i>\n\n";
+
+            $count = 0;
+            foreach ($data['data']['children'] as $item) {
+                if ($count >= 5) {
+                    break;
+                }
+
+                $post = $item['data'];
+                $title = Str::limit($post['title'], 100);
+                $url = 'https://reddit.com'.$post['permalink'];
+                $score = $post['score'];
+
+                $response .= "• <b>{$title}</b>\n";
+                $response .= "  👍 {$score} | <a href='{$url}'>Leggi</a>\n\n";
+
+                $count++;
+            }
+
+            $response .= "\n💡 <i>Usa: /news tech, /news world, /news italia</i>";
+
+            $this->chat->html($response)->send();
+
+            BotLog::log(
+                'command_executed',
+                $this->bot->id,
+                $this->chat->id,
+                'News fetched',
+                ['category' => $category ?: 'default']
+            );
+        } catch (Exception $e) {
+            $this->chat->html("❌ <b>Errore nel caricamento notizie!</b>\n\nRiprova più tardi.")->send();
+
+            BotLog::log(
+                'error',
+                $this->bot->id,
+                $this->chat->id,
+                'News fetch error',
+                ['error' => $e->getMessage()]
+            );
+        }
+    }
+
+    public function promemoria(): void
+    {
+        // Rate limiting
+        if (! $this->checkRateLimit('promemoria', 'medium')) {
+            return;
+        }
+
+        $text = $this->message->text();
+        $params = trim(str_replace('/promemoria', '', $text));
+
+        // Handle list command
+        if ($params === 'lista') {
+            $reminders = Reminder::where('telegraph_chat_id', $this->chat->id)
+                ->pending()
+                ->orderBy('remind_at', 'asc')
+                ->get();
+
+            if ($reminders->isEmpty()) {
+                $this->chat->html("⏰ <b>Nessun promemoria attivo</b>\n\nUsa <code>/promemoria 10m Messaggio</code> per crearne uno.")->send();
+
+                return;
+            }
+
+            $response = "⏰ <b>Promemoria Attivi</b>\n\n";
+            foreach ($reminders as $reminder) {
+                $when = $reminder->remind_at->diffForHumans();
+                $response .= "🔔 <b>#{$reminder->id}</b> - {$when}\n";
+                $response .= "   {$reminder->message}\n";
+                $response .= "   <code>/promemoria cancella {$reminder->id}</code>\n\n";
+            }
+
+            $this->chat->html($response)->send();
+
+            return;
+        }
+
+        // Handle cancel command
+        if (str_starts_with($params, 'cancella ')) {
+            $id = (int) trim(str_replace('cancella', '', $params));
+
+            $reminder = Reminder::where('telegraph_chat_id', $this->chat->id)
+                ->where('id', $id)
+                ->pending()
+                ->first();
+
+            if (! $reminder) {
+                $this->chat->html("❌ <b>Promemoria non trovato</b>\n\nUsa <code>/promemoria lista</code> per vedere i promemoria attivi.")->send();
+
+                return;
+            }
+
+            $reminder->delete();
+
+            $this->chat->html("✅ <b>Promemoria cancellato</b>\n\nIl promemoria #{$id} è stato eliminato.")->send();
+
+            BotLog::log(
+                'reminder_cancelled',
+                $this->bot->id,
+                $this->chat->id,
+                "Reminder cancelled: #{$id}",
+                ['reminder_id' => $id]
+            );
+
+            return;
+        }
+
+        // Parse time and message (e.g., "10m Check the oven")
+        if (! preg_match('/^(\d+)([mhd])\s+(.+)$/i', $params, $matches)) {
+            $helpMessage = "⏰ <b>Imposta Promemoria</b>\n\n";
+            $helpMessage .= "📝 <b>Formato:</b>\n";
+            $helpMessage .= "<code>/promemoria [tempo] [messaggio]</code>\n\n";
+            $helpMessage .= "⏱️ <b>Unità di tempo:</b>\n";
+            $helpMessage .= "• <code>m</code> = minuti\n";
+            $helpMessage .= "• <code>h</code> = ore\n";
+            $helpMessage .= "• <code>d</code> = giorni\n\n";
+            $helpMessage .= "📌 <b>Esempi:</b>\n";
+            $helpMessage .= "<code>/promemoria 10m Controllare il forno</code>\n";
+            $helpMessage .= "<code>/promemoria 1h Riunione importante</code>\n";
+            $helpMessage .= "<code>/promemoria 2d Pagare bolletta</code>\n\n";
+            $helpMessage .= "📋 <b>Altri comandi:</b>\n";
+            $helpMessage .= "<code>/promemoria lista</code> - Vedi promemoria\n";
+            $helpMessage .= '<code>/promemoria cancella [id]</code> - Elimina';
+
+            $this->chat->html($helpMessage)->send();
+
+            return;
+        }
+
+        $amount = (int) $matches[1];
+        $unit = strtolower($matches[2]);
+        $message = trim($matches[3]);
+
+        // Calculate remind_at datetime
+        $remindAt = now();
+        match ($unit) {
+            'm' => $remindAt = $remindAt->addMinutes($amount),
+            'h' => $remindAt = $remindAt->addHours($amount),
+            'd' => $remindAt = $remindAt->addDays($amount),
+            default => null,
+        };
+
+        // Create reminder
+        $reminder = Reminder::create([
+            'telegraph_bot_id' => $this->bot->id,
+            'telegraph_chat_id' => $this->chat->id,
+            'message' => $message,
+            'remind_at' => $remindAt,
+        ]);
+
+        $when = $remindAt->diffForHumans();
+
+        $response = "✅ <b>Promemoria Impostato!</b>\n\n";
+        $response .= "🔔 Ti ricorderò <b>{$when}</b>\n";
+        $response .= "📝 Messaggio: <i>{$message}</i>\n\n";
+        $response .= "⏰ Data/ora: {$remindAt->format('d/m/Y H:i')}\n";
+        $response .= "🆔 ID: <code>{$reminder->id}</code>";
+
+        $this->chat->html($response)->send();
+
+        BotLog::log(
+            'reminder_created',
+            $this->bot->id,
+            $this->chat->id,
+            "Reminder created: {$message}",
+            [
+                'reminder_id' => $reminder->id,
+                'remind_at' => $remindAt->toIso8601String(),
+            ]
+        );
     }
 
     public function meteo(): void
